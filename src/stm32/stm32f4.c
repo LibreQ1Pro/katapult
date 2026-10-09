@@ -221,6 +221,31 @@ stm32_reset_chip_state(void)
     RCC->APB2RSTR = 0xffffffff;
     RCC->APB2RSTR = 0;
 }
+
+// The application may start this bootloader without a chip reset while
+// its independent watchdog is running (it can not be stopped).  Use the
+// longest watchdog timeout (flash erases are slow) and keep feeding it.
+void
+iwdg_init(void)
+{
+    if (!(RCC->CSR & RCC_CSR_LSIRDY))
+        // Watchdog not running (it forces the LSI oscillator on)
+        return;
+    IWDG->KR = 0x5555;
+    IWDG->PR = 6; // ~32 seconds
+    IWDG->RLR = 0x0FFF;
+    while (IWDG->SR)
+        ;
+    IWDG->KR = 0xAAAA;
+}
+DECL_INIT(iwdg_init);
+
+void
+iwdg_feed_task(void)
+{
+    IWDG->KR = 0xAAAA;
+}
+DECL_TASK(iwdg_feed_task);
 #endif
 
 // Reboot into USB "HID" bootloader
