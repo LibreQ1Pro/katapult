@@ -64,11 +64,24 @@ application_check_valid(void)
     return *app != 0 && *app != 0xffffffff;
 }
 
+#if CONFIG_STM32_KATAPULT_AFTER_VENDOR_BL
+void stm32_reset_chip_state(void);
+#endif
+
 // Jump to the main application (exiting the bootloader)
 void
 application_jump(void)
 {
     irq_disable();
+#if CONFIG_STM32_KATAPULT_AFTER_VENDOR_BL
+    // A chip reset would run the vendor bootloader (which may clear the
+    // bootup code) - so start the application directly
+    stm32_reset_chip_state();
+    uint32_t *vtor = (void*)CONFIG_LAUNCH_APP_ADDRESS;
+    SCB->VTOR = (uint32_t)vtor;
+    irq_enable();
+    asm volatile("MSR msp, %0\n    bx %1" : : "r"(vtor[0]), "r"(vtor[1]));
+#endif
     set_bootup_code(REQUEST_START_APP);
     NVIC_SystemReset();
 }

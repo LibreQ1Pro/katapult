@@ -488,8 +488,18 @@ config STM32_CANBUS_PH13_PH14
 # Flash settings
 ######################################################################
 
+config STM32_KATAPULT_AFTER_VENDOR_BL
+    bool "Install after a 32KiB vendor bootloader (keep it intact)" if MACH_STM32F4
+    default n
+    help
+        Place Katapult at 0x08008000 (where a 32KiB vendor bootloader
+        starts the application) and the application at 0x0800C000.
+        The vendor bootloader is never modified.  Katapult then starts
+        the application without a chip reset.
+
 config FLASH_START
     hex
+    default 0x8008000 if STM32_KATAPULT_AFTER_VENDOR_BL
     default 0x8000000
 
 choice
@@ -508,6 +518,7 @@ endchoice
 
 config LAUNCH_APP_ADDRESS
     hex
+    default 0x800C000 if STM32_KATAPULT_AFTER_VENDOR_BL
     default 0x8020000 if STM32_APP_START_20000
     default 0x8008000 if STM32_APP_START_8000
     default 0x8004000 if STM32_APP_START_4000

@@ -191,6 +191,38 @@ clock_setup(void)
  * Bootloader
  ****************************************************************/
 
+#if CONFIG_STM32_KATAPULT_AFTER_VENDOR_BL
+// Return the chip to (mostly) its reset state before starting the
+// application without a chip reset
+void
+stm32_reset_chip_state(void)
+{
+    // Stop systick and disable all interrupts
+    SysTick->CTRL = 0;
+    for (int i = 0; i < ARRAY_SIZE(NVIC->ICER); i++) {
+        NVIC->ICER[i] = 0xffffffff;
+        NVIC->ICPR[i] = 0xffffffff;
+    }
+    // Run from the internal oscillator with the pll disabled
+    RCC->CR |= RCC_CR_HSION;
+    while (!(RCC->CR & RCC_CR_HSIRDY))
+        ;
+    RCC->CFGR = 0;
+    while (RCC->CFGR & RCC_CFGR_SWS)
+        ;
+    RCC->CR &= ~(RCC_CR_PLLON | RCC_CR_HSEON);
+    // Reset all peripherals
+    RCC->AHB1RSTR = 0xffffffff;
+    RCC->AHB1RSTR = 0;
+    RCC->AHB2RSTR = 0xffffffff;
+    RCC->AHB2RSTR = 0;
+    RCC->APB1RSTR = 0xffffffff;
+    RCC->APB1RSTR = 0;
+    RCC->APB2RSTR = 0xffffffff;
+    RCC->APB2RSTR = 0;
+}
+#endif
+
 // Reboot into USB "HID" bootloader
 static void
 usb_hid_bootloader(void)
