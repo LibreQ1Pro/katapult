@@ -495,7 +495,9 @@ config STM32_KATAPULT_AFTER_VENDOR_BL
         Place Katapult at 0x08008000 (where a 32KiB vendor bootloader
         starts the application) and the application at 0x0800C000.
         The vendor bootloader is never modified.  Katapult then starts
-        the application without a chip reset.
+        the application without a chip reset and writes the start of
+        the application last, so an interrupted upload leaves Katapult
+        active.
 
 config FLASH_START
     hex

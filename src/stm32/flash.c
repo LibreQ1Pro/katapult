@@ -180,6 +180,32 @@ write_block(uint32_t block_address, uint32_t *data)
 
 static uint32_t page_write_count;
 
+#if CONFIG_STM32_KATAPULT_AFTER_VENDOR_BL
+// The first block of the application is written at the end of the
+// upload, so that an interrupted upload leaves the application invalid
+static uint32_t first_block[CONFIG_BLOCK_SIZE / 4];
+static uint8_t have_first_block;
+
+static int
+defer_first_block(uint32_t block_address, uint32_t *data)
+{
+    uint32_t flash_page_size = flash_get_page_size(block_address);
+    if (!have_first_block
+        || !check_erased(block_address, flash_page_size)) {
+        // Start of a new upload - erase the first page
+        unlock_flash();
+        erase_page(block_address);
+        lock_flash();
+        if (!check_erased(block_address, flash_page_size))
+            return -3;
+        page_write_count++;
+    }
+    memcpy(first_block, data, CONFIG_BLOCK_SIZE);
+    have_first_block = 1;
+    return 0;
+}
+#endif
+
 // Main block write interface
 int
 flash_write_block(uint32_t block_address, uint32_t *data)
@@ -187,6 +213,10 @@ flash_write_block(uint32_t block_address, uint32_t *data)
     if (block_address & (CONFIG_BLOCK_SIZE - 1))
         // Not a block aligned address
         return -1;
+#if CONFIG_STM32_KATAPULT_AFTER_VENDOR_BL
+    if (block_address == CONFIG_LAUNCH_APP_ADDRESS)
+        return defer_first_block(block_address, data);
+#endif
     uint32_t flash_page_size = flash_get_page_size(block_address);
     uint32_t page_address = ALIGN_DOWN(block_address, flash_page_size);
 
@@ -243,5 +273,18 @@ flash_write_block(uint32_t block_address, uint32_t *data)
 int
 flash_complete(void)
 {
+#if CONFIG_STM32_KATAPULT_AFTER_VENDOR_BL
+    if (have_first_block) {
+        uint32_t addr = CONFIG_LAUNCH_APP_ADDRESS;
+        if (!check_erased(addr, CONFIG_BLOCK_SIZE))
+            return -1;
+        unlock_flash();
+        write_block(addr, first_block);
+        lock_flash();
+        if (memcmp(first_block, (void*)addr, CONFIG_BLOCK_SIZE) != 0)
+            return -1;
+        have_first_block = 0;
+    }
+#endif
     return page_write_count;
 }
